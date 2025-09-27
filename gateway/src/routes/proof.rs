@@ -79,7 +79,7 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
                         "messages": [
                             {"role": "system", "content": "You are judge who will compare two message by user and check  whether user telling the story is matching user who is giving proof statement and also give similarity index. generate the resposne in structured json format to show whether the proof statement matches the story in boolean and give a commentary in 30 words"} ,
                             {"role": "user", "content": format!("Story: {}", result.content) } ,
-                            {"role": "user", "content": result.proof_content.unwrap_or("".to_string()) }
+                            {"role": "user", "content": format!("Proof: {}", result.proof_content.unwrap_or("".to_string())) }
                         ],
                         "web_search": false,
                         "stream": false
