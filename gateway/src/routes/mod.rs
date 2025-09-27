@@ -1,6 +1,6 @@
 mod proof;
 mod types;
-use poem::{IntoResponse, Response, Route, get, handler, http::StatusCode, post, web::Json};
+use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -8,21 +8,21 @@ struct Health {
     status: String,
 }
 
-#[handler]
-async fn get_health() -> Response {
+async fn get_health() -> impl Responder {
     let health = Health {
         status: "Ok".to_string(),
     };
-    Json(serde_json::json!(health))
-        .with_status(StatusCode::OK)
-        .into_response()
+    HttpResponse::Ok().json(health)
 }
 
-pub fn api() -> Route {
-    let api = Route::new()
-        .at("/health", get(get_health))
-        .at("/v1/proof",post(proof::submit_proof).get(proof::get_submissions),
+pub fn api(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/api")
+            .route("/health", web::get().to(get_health))
+            .service(
+                web::resource("/v1/proof")
+                    .route(web::post().to(proof::submit_proof))
+                    .route(web::get().to(proof::get_submissions))
+            )
     );
-
-    Route::new().nest("/api", api)
 }

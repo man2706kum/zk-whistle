@@ -42,10 +42,9 @@ pub struct Submission {
     #[default(false)]
     active: bool,
 
-
     ai_comment: String,
 
-    file_cid: String,
+    cid: String,
 
     zk_pdf_hash: String,
 }

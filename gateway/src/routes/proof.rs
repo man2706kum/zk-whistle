@@ -1,40 +1,33 @@
-use std::str::FromStr;
 
+use std::str::FromStr;
 use crate::models::{OrgType, Submission, Verification};
 use crate::routes::types::{ErrorResponse, Proof, ResponseSubmission, SubmissionResponse};
 use futures::TryStreamExt;
-use poem::http::StatusCode;
-use poem::web::{Json, Query};
-use poem::{IntoResponse, Result, handler};
+use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
-
 use oximod::_mongodb::{
     Collection,
     bson::{doc, oid::ObjectId},
 };
 use oximod::{Model, get_global_client};
 
-#[handler]
-pub async fn submit_proof(res: Result<Json<Proof>>) -> Result<impl IntoResponse> {
-    let result = res?;
- 
+pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
+    let result = payload.into_inner();
     //check if proof is already verified
     let v = Verification::find_one(doc! {"uuid" : result.proof.to_string() }).await;
 
     if v.is_err() {
-        return Ok(
-            Json(serde_json::json!(ErrorResponse { error : String::from("Could not fetch proof") }))
-                .with_status(StatusCode::INTERNAL_SERVER_ERROR)
-                .into_response(),
-        );
+        return HttpResponse::InternalServerError().json(ErrorResponse {
+            error: String::from("Could not fetch proof")
+        });
     }
 
     let o = v.unwrap();
 
     if o.is_none() {
-        return Ok(Json(serde_json::json!(ErrorResponse { error : String::from("Proof not found") }))
-            .with_status(StatusCode::BAD_REQUEST)
-            .into_response());
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: String::from("Proof not found")
+        });
     }
 
     let proof_id = ObjectId::from_str(o.unwrap()._id.unwrap().to_string().as_ref()).expect("proof");
@@ -46,7 +39,8 @@ pub async fn submit_proof(res: Result<Json<Proof>>) -> Result<impl IntoResponse>
         .user_id(result.user_id.to_owned().unwrap_or("0x".to_string()))
         .org_type(result.org_type.clone())
         .proof(proof_id)
-        .content(result.content.to_owned());
+        .content(result.content.to_owned())
+        .cid(result.cid.to_owned().unwrap_or("".to_owned()));
 
     let submission_result = submission.save().await;
 
@@ -56,67 +50,43 @@ pub async fn submit_proof(res: Result<Json<Proof>>) -> Result<impl IntoResponse>
                 msg: "Submission received !".to_string(),
                 submission_id: submission_id.to_hex(),
             };
-
-            Ok(Json(serde_json::json!(response))
-                .with_status(StatusCode::CREATED)
-                .into_response())
+            HttpResponse::Created().json(response)
         }
-        Err(_) => Ok(
-            Json(serde_json::json!(ErrorResponse { error : String::from("Could not submit proof") }))
-                .with_status(StatusCode::INTERNAL_SERVER_ERROR)
-                .into_response(),
-        ),
+        Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: String::from("Could not submit proof")
+        }),
     }
 }
 
+
 #[derive(Deserialize, Serialize)]
-struct SubmissionParams {
-    org_type: Option<OrgType>,
-    offset: Option<u64>,
-    page_size: Option<i64>,
+pub struct SubmissionParams {
+    pub org_type: Option<OrgType>,
+    pub offset: Option<u64>,
+    pub page_size: Option<i64>,
 }
 
-#[handler]
-pub async fn get_submissions(
-    query: Result<Query<SubmissionParams>>,
-) -> poem::Result<impl IntoResponse> {
-    let result_query = query?;
-    let skip = match result_query.offset {
-        Some(v) => v,
-        None => 0,
-    };
-
-    let limit = match result_query.page_size {
-        Some(v) => v,
-        None => 0,
-    };
+pub async fn get_submissions(query: web::Query<SubmissionParams>) -> impl Responder {
+    let result_query = query.into_inner();
+    let skip = result_query.offset.unwrap_or(0);
+    let limit = result_query.page_size.unwrap_or(0);
 
     let mut filter_query = doc! {};
-    match &result_query.org_type {
-        Some(v) => {
-            filter_query.insert("org_type", oximod::_mongodb::bson::to_bson(v).unwrap());
-        }
-        None => {}
+    if let Some(v) = &result_query.org_type {
+        filter_query.insert("org_type", oximod::_mongodb::bson::to_bson(v).unwrap());
     }
 
     let c = get_global_client().unwrap();
     let collection: Collection<Submission> = c.database("zkWhistle").collection("proofs");
-    let cursor_result = collection
-        .find(filter_query)
-        .skip(skip)
-        .limit(limit)
-        .await;
+    let cursor_result = collection.find(filter_query).skip(skip).limit(limit).await;
 
     if cursor_result.is_err() {
-      return  Ok(
-            Json(serde_json::json!(ErrorResponse { error : String::from("Unable to query") }))
-                .with_status(StatusCode::INTERNAL_SERVER_ERROR)
-                .into_response(),
-        );
+        return HttpResponse::InternalServerError().json(ErrorResponse {
+            error: String::from("Unable to query")
+        });
     }
 
     let mut cursor = cursor_result.unwrap();
-
     let mut res: Vec<ResponseSubmission> = vec![];
     while let Some(doc) = cursor.try_next().await.unwrap() {
         res.push(ResponseSubmission {
@@ -128,7 +98,5 @@ pub async fn get_submissions(
         });
     }
 
-    Ok(Json(serde_json::json!({ "submissions" : res}))
-        .with_status(StatusCode::OK)
-        .into_response())
+    HttpResponse::Ok().json(serde_json::json!({ "submissions" : res }))
 }

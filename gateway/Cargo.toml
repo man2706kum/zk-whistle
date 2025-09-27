@@ -5,7 +5,10 @@ edition = "2024"
 
 
 [dependencies]
+actix-cors = "0.7.1"
+actix-web = "4.11.0"
 dotenv = "0.15.0"
+env_logger = "0.11.8"
 futures = "0.3.31"
 oximod = "0.1.7"
 oximod_core = "0.1.10"

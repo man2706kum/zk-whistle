@@ -10,6 +10,8 @@ pub struct Proof {
     pub title: String,
     pub content: String,
     pub org_type: OrgType,
+    pub cid: Option<String>,
+    pub ai_verification : Option<bool>,
 }
 
 #[derive(Deserialize, Serialize)]
