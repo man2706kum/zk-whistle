@@ -48,25 +48,6 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
 
     let proof_id = ObjectId::from_str(o.unwrap()._id.unwrap().to_string().as_ref()).expect("proof");
 
-    /*
-
-        URL: POST  https://api.asi1.ai/v1/chat/completions
-
-    bearer token: sk_f2f4d22fa28e4d3c8f9b8cb97aa800f39abf722bb2fb4580bf681c5817464da4
-    {
-    "model": "asi1-fast",
-    "messages": [
-    {"role": "system", "content": "You are judge who will compare two message by user and check  whether user telling the story is matching user who is giving proof statement and also give similarity index. generate the resposne in structured json format to show whether the proof statement matches the story in boolean"} ,
-    {"role": "user", "content": "Story: At my steel factory, john buying stuff for steel rods for 1000 rupees per kg for high quality steel but the steel being delivered is lower quality of 100 rupees per kg."} ,
-    {"role": "user", "content": "proof: 10 kg of steel is delivered to ABC Appliances at 10000 rupees."}
-    ],
-      "web_search" : false,
-      "stream" : false
-    }
-
-
-         */
-
     let ai_res = match result.ai_verification {
         Some(v) => {
             if v {
