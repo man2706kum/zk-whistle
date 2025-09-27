@@ -140,6 +140,7 @@ pub async fn get_submissions(query: web::Query<SubmissionParams>) -> impl Respon
             domain: doc.domain,
             org_type: doc.org_type,
             submission_date: doc.submission_date.try_to_rfc3339_string().unwrap(),
+            ai_comment: doc.ai_comment,
         });
     }
 

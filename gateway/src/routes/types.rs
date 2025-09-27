@@ -28,6 +28,7 @@ pub struct ResponseSubmission {
     pub org_type: OrgType,
     pub submission_date: String,
     pub domain: String,
+    pub ai_comment: String,
 }
 
 
