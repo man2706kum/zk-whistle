@@ -12,6 +12,7 @@ pub struct Proof {
     pub org_type: OrgType,
     pub cid: Option<String>,
     pub ai_verification : Option<bool>,
+    pub proof_content : Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]

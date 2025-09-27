@@ -1,15 +1,31 @@
-
-use std::str::FromStr;
 use crate::models::{OrgType, Submission, Verification};
 use crate::routes::types::{ErrorResponse, Proof, ResponseSubmission, SubmissionResponse};
+use actix_web::{HttpResponse, Responder, web};
+use core::str;
 use futures::TryStreamExt;
-use actix_web::{web, HttpResponse, Responder};
-use serde::{Deserialize, Serialize};
 use oximod::_mongodb::{
     Collection,
     bson::{doc, oid::ObjectId},
 };
 use oximod::{Model, get_global_client};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::str::FromStr;
+
+#[derive(Deserialize, Debug)]
+struct ApiResponse {
+    choices: Vec<Choice>,
+}
+#[derive(Deserialize, Debug)]
+struct Choice {
+    message: Message,
+}
+
+#[derive(Deserialize, Debug)]
+struct Message {
+    role: String,
+    content: String,
+}
 
 pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
     let result = payload.into_inner();
@@ -18,7 +34,7 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
 
     if v.is_err() {
         return HttpResponse::InternalServerError().json(ErrorResponse {
-            error: String::from("Could not fetch proof")
+            error: String::from("Could not fetch proof"),
         });
     }
 
@@ -26,11 +42,59 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
 
     if o.is_none() {
         return HttpResponse::BadRequest().json(ErrorResponse {
-            error: String::from("Proof not found")
+            error: String::from("Proof not found"),
         });
     }
 
     let proof_id = ObjectId::from_str(o.unwrap()._id.unwrap().to_string().as_ref()).expect("proof");
+
+    /*
+
+        URL: POST  https://api.asi1.ai/v1/chat/completions
+
+    bearer token: sk_f2f4d22fa28e4d3c8f9b8cb97aa800f39abf722bb2fb4580bf681c5817464da4
+    {
+    "model": "asi1-fast",
+    "messages": [
+    {"role": "system", "content": "You are judge who will compare two message by user and check  whether user telling the story is matching user who is giving proof statement and also give similarity index. generate the resposne in structured json format to show whether the proof statement matches the story in boolean"} ,
+    {"role": "user", "content": "Story: At my steel factory, john buying stuff for steel rods for 1000 rupees per kg for high quality steel but the steel being delivered is lower quality of 100 rupees per kg."} ,
+    {"role": "user", "content": "proof: 10 kg of steel is delivered to ABC Appliances at 10000 rupees."}
+    ],
+      "web_search" : false,
+      "stream" : false
+    }
+
+
+         */
+
+    let ai_res = match result.ai_verification {
+        Some(v) => {
+            if v {
+                // make a rest call
+                let client = reqwest::Client::new();
+                let res = client.post("https://api.asi1.ai/v1/chat/completions")
+                    .bearer_auth( std::env::var_os("ASI_API_KEY").unwrap())
+                    .json(&serde_json::json!({
+                        "model": "asi1-mini",
+                        "messages": [
+                            {"role": "system", "content": "You are judge who will compare two message by user and check  whether user telling the story is matching user who is giving proof statement and also give similarity index. generate the resposne in structured json format to show whether the proof statement matches the story in boolean and give a commentary in 30 words"} ,
+                            {"role": "user", "content": format!("Story: {}", result.content) } ,
+                            {"role": "user", "content": result.proof_content.unwrap_or("".to_string()) }
+                        ],
+                        "web_search": false,
+                        "stream": false
+                    }))
+                    .send()
+                    .await;
+
+                let json: ApiResponse = res.json().await?;
+                if json.choices.len() > 0 {
+                    json.choices[0].message.content
+                }
+            }
+        }
+        None => "".to_string(),
+    };
 
     let submission = Submission::new()
         .active(true)
@@ -40,7 +104,8 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
         .org_type(result.org_type.clone())
         .proof(proof_id)
         .content(result.content.to_owned())
-        .cid(result.cid.to_owned().unwrap_or("".to_owned()));
+        .cid(result.cid.to_owned().unwrap_or("".to_owned()))
+        .ai_comment(ai_res);
 
     let submission_result = submission.save().await;
 
@@ -53,11 +118,10 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
             HttpResponse::Created().json(response)
         }
         Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
-            error: String::from("Could not submit proof")
+            error: String::from("Could not submit proof"),
         }),
     }
 }
-
 
 #[derive(Deserialize, Serialize)]
 pub struct SubmissionParams {
@@ -82,7 +146,7 @@ pub async fn get_submissions(query: web::Query<SubmissionParams>) -> impl Respon
 
     if cursor_result.is_err() {
         return HttpResponse::InternalServerError().json(ErrorResponse {
-            error: String::from("Unable to query")
+            error: String::from("Unable to query"),
         });
     }
 
