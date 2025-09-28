@@ -42,11 +42,11 @@ pub struct Submission {
     #[default(false)]
     active: bool,
 
-    ai_comment: String,
+    pub ai_comment: String,
 
-    cid: String,
+    pub cid: String,
 
-    zk_pdf_hash: String,
+    pub zk_pdf_hash: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Model)]

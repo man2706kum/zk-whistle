@@ -9,7 +9,6 @@ use oximod::_mongodb::{
 };
 use oximod::{Model, get_global_client};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::str::FromStr;
 
 #[derive(Deserialize, Debug)]
@@ -23,7 +22,7 @@ struct Choice {
 
 #[derive(Deserialize, Debug)]
 struct Message {
-    role: String,
+    _role: String,
     content: String,
 }
 
@@ -54,7 +53,7 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
                 // make a rest call
                 let client = reqwest::Client::new();
                 let res = client.post("https://api.asi1.ai/v1/chat/completions")
-                    .bearer_auth( std::env::var_os("ASI_API_KEY").unwrap())
+                    .bearer_auth( std::env::var("ASI_API_KEY").unwrap_or("".to_string()))
                     .json(&serde_json::json!({
                         "model": "asi1-mini",
                         "messages": [
@@ -68,10 +67,16 @@ pub async fn submit_proof(payload: web::Json<Proof>) -> impl Responder {
                     .send()
                     .await;
 
-                let json: ApiResponse = res.json().await?;
+                let json: ApiResponse = res.unwrap().json().await.unwrap();
                 if json.choices.len() > 0 {
-                    json.choices[0].message.content
+                    json.choices[0].message.content.clone()
                 }
+                else {
+                    "".to_string()
+                }
+            }
+            else {
+                "".to_string()
             }
         }
         None => "".to_string(),
